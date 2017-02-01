@@ -1,0 +1,152 @@
+{
+    var variables = {};
+}
+
+start = _ everything:statement_list _ { 
+        for (var i = 0; i < everything.length; i++) {
+            everything[i]();
+        }
+        return variables;
+    }
+ 
+statement
+    = lvalue:variable _ ":=" _ result:arith_expr { 
+        return function() {
+            variables[lvalue] = result();
+        };
+    }
+ 
+    / "skip" { return function() { }; }
+    
+    / statements:compound_statement { return function() {
+            for (var i = 0; i < statements.length; i++) {
+                statements[i]();
+            }
+        };
+    }
+    
+    / "if" gap expr:bool_expr gap
+        "then" gap stmt_true:statement gap
+        "else" gap stmt_false:statement { return function() {
+            if (expr()) {
+                stmt_true();
+            } else {
+                stmt_false();
+            }
+        };
+    }
+    
+
+    / "while" gap expr:bool_expr gap "do" gap loop:statement { 
+        var captured_loc = location();
+        return function() {
+            var escape = 0;
+            while (expr()) {
+                loop();
+                escape += 1;
+                if (escape > 1000000) {
+                    error("Loop exceeded 1 million iterations.", captured_loc);
+                }
+            }
+        };
+    }
+
+compound_statement = "(" _ list:statement_list _ ")" { return list; }
+statement_list = _ list:(statement _ ";" _ )* end:statement _ {
+        var statements = [];
+        for (var i = 0; i < list.length; i++) {
+            statements.push(list[i][0]);
+        }
+        statements.push(end);
+        return statements;
+    }
+
+bool_expr 
+    = head:bool_factor tail:( _ and _ bool_factor)* { return function() {
+            var state = head();
+            for (var i = 0; i < tail.length; i++) {
+                state = state && tail[i][3]();
+            }
+            return state;
+        };
+    }
+    
+bool_factor
+    = lit:bool_literal { return lit; }
+    / not _ neg:bool_literal { return function() { return !neg(); }; }
+    / "(" _ expr:bool_expr _ ")" { return expr; }
+    / not _ "(" _ expr:bool_expr _ ")" { return function() { return !expr(); }; }
+    / cmp:bool_compare { return cmp; }
+    
+    
+bool_literal "bool_literal"
+    = "true" { return function() { return true; }; }
+    / "false" { return function() { return false; } }
+
+bool_compare 
+    = left:arith_expr _ op:("<=" / "=") _ right:arith_expr { return function() {
+            if (op === "=") { return left() === right(); }
+            else { return left() <= right(); }
+        };
+    }
+    
+
+    
+arith_expr 
+    = head:mult_expr tail:( _ ("+" / "-") _ mult_expr)* { return function() {
+            var total = head();
+            for (var i = 0; i < tail.length; i++) {
+                if (tail[i][0] === "+") {
+                    total += tail[i][3]();
+                } else {
+                    total -= tail[i][3]();
+                }
+            }
+            return total;
+        };
+    }
+    
+mult_expr 
+    = head:term tail:( _ ("*" / "/") _ term)* { return function() {
+            var product = head();
+            for (var i = 0; i < tail.length; i++) {
+                if (tail[i][1] == "*") {
+                    product *= tail[i][3]();
+                } else {
+                    product /= tail[i][3]();
+                }
+            }
+            return product;
+        };
+    }
+
+term 
+    = "(" _ expr:arith_expr _ ")" { return expr; }
+    / "-" _ t:term { return function() { return -t(); } }
+    
+    / txt:number { 
+        var num = parseFloat(txt);
+        return function() { return num }; 
+    }
+    
+    / vari:variable { 
+        var captured_loc = location();
+        return function() {
+            if (!(vari in variables)) {
+                error("uninitialized variable \"" + vari +
+                         "\" used.", captured_loc);
+            } else {
+                return variables[vari];
+            }
+        };
+    }
+
+variable "variable" = $(letter (letter / digit)*)
+number "number" = $(digit+ ("." digit+)?)
+letter "letter" = [a-zA-Z]
+digit "digit" = [0-9]
+and "and"  = gap "and" gap / "^"
+not "not "= gap "not" gap / "~"
+_ "whitespace" = [ \t\n\r]*
+gap "required_spacing" = [ \t\n\r]+
+
