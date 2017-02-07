@@ -188,6 +188,18 @@
         </script>
 
         <script>
+            if (!String.prototype.format) {
+                String.prototype.format = function() {
+                    var args = arguments;
+                    return this.replace(/{(\d+)}/g, function(match, number) { 
+                        return typeof args[number] != 'undefined'
+                        ? args[number]
+                        : match
+                        ;
+                    });
+                };
+            }
+            
 
             $(window).on("beforeunload", function() {
                 localStorage.setItem("program", $("#sourceCode").val());
@@ -224,7 +236,17 @@
                         $("#outputArea").append($div);
 
                     } catch (fail) {
-                        $("#outputArea").text("Error: " + fail.message);
+                    var error = ("<p>{0} starting at line {1} column {2} and" +
+                                 " ending at line {3} column {4}: <br> {5}</p>"
+                                    ).format(fail.name,
+                                        fail.location.start.line,
+                                        fail.location.start.column,
+                                        fail.location.end.line,
+                                        fail.location.end.column,
+                                        fail.message);
+
+                        $("#outputArea").empty();
+                        $("#outputArea").append($(error));
                     }
                 });
 
@@ -257,6 +279,7 @@
 
             #outputArea {
                 white-space: pre;
+                word-wrap: break-word;
             }
 
             table, th, td {
