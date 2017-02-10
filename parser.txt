@@ -96,7 +96,7 @@ arith_expr
     = head:mult_expr tail:( _ ("+" / "-") _ mult_expr)* { return function() {
             var total = head();
             for (var i = 0; i < tail.length; i++) {
-                if (tail[i][0] === "+") {
+                if (tail[i][1] === "+") {
                     total += tail[i][3]();
                 } else {
                     total -= tail[i][3]();
